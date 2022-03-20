@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+Choose the shirt colour:<select id="Colors" onchange="colour_changed()">
+    <option value="Green">Green</option>
+    <option value="Blue">Blue</option>
+    <option value="Yellow">Yellow</option>
+    <option value="Purple">Purple</option>
+</select><br>
+Choose the Shirt Material :<select id="Material">
+    <option  id=0>Cotton Stock:100</option>
+    <option  id=1>Woolen Stock:20</option>
+    <option  id =2>Silk Stock:20</option>
+    <option  id=3>Nylon Stock:20</option>
+</select><br>
+<select id ="NoOfShirts"></select>
+
+ <input type="button" id="add_shirt" value=" Add Shirt/s " onclick="add_shirt()">
+
+<input type="submit" value=" Do Final Submission " onclick=final_submission()>
+<div id ="shirt1"></div>
+<div id ="backend"></div>
+
+<script>
+    (function() { // don't leak
+    var elm = document.getElementById("NoOfShirts"), // get the select
+        df = document.createDocumentFragment(); // create a document fragment to hold the options while we create them
+    for (var i = 1; i <= 10; i++) { // loop, i like 42.
+        var option = document.createElement('option'); // create the option element
+        option.value = i; // set the value property
+        option.appendChild(document.createTextNode(i)); // set the textContent in a safe way.
+        df.appendChild(option); // append the option to the document fragment
+    }
+    elm.appendChild(df); // append the document fragment to the DOM. this is the better way rather than setting innerHTML a bunch of times (or even once with a long string)
+}());
+    
+    // this function is responsible to add the initial data to the database(done by connecting to the backend server)
+    window.onload=function(){
+        var colors_vs_materials=new Map()
+        var materials=document.getElementById('Material')
+        var Colors=document.getElementById('Colors')
+        var children_of_material
+        for(var child_color=0;child_color<Colors.children.length*2;child_color++){
+            for(var child_material=0;child_material<materials.children.length*2;child_material++){
+                 if(materials.childNodes[child_material].nodeName=='OPTION'){
+                     children_of_material+=materials.childNodes[child_material].value+";"
+                 }
+            }
+            if(Colors.childNodes[child_color].nodeName=='OPTION') 
+            colors_vs_materials.set(Colors.childNodes[child_color].value,children_of_material.replaceAll(":","="))
+            children_of_material=""
+            
+        }
+        console.log(colors_vs_materials)
+        map_in_json=""
+        colors_vs_materials.forEach((key,value)=>{
+             map_in_json+="{"+value+":"+key+","
+            map_in_json=map_in_json.replaceAll(";,",",")
+            map_in_json=map_in_json.substring(0,map_in_json.length-1)
+            map_in_json=map_in_json+"}"
+            console.log("Printed"+map_in_json)
+             rest_api_to_add_data(map_in_json)
+             map_in_json=""
+        })
+           
+    }
+        //uses rest api to send all the color and material data to backend server in string format got by JSON.stringify
+        function rest_api_to_add_data(colors_vs_materials){
+            xmlhttp = new XMLHttpRequest();
+           
+            xmlhttp.open("POST","http://localhost:8080/sql_adder",true)
+            xmlhttp.setRequestHeader("Content-type", "text/plain");
+            xmlhttp.send(JSON.stringify(colors_vs_materials))// the json format of the  map created
+        }
+
+        //this function is triggered when we change the colour
+        function colour_changed(){
+            color=document.getElementById('Colors')
+            materials=document.getElementById('Material')
+            console.log("colour changed"+color.value)
+            childs_to_delete=[]//this will contain all the elements to be deleted
+            
+            for(var id=0;id<=materials.children.length*2;id++){
+                if(materials.childNodes[id].nodeName=='OPTION'){
+                   childs_to_delete.push(materials.childNodes[id])
+                }
+            }
+            childs_to_delete.forEach(child_to_delete=>{
+                materials.removeChild(child_to_delete)
+            })
+            var child_nodes_for_material=rest_api_caller_to_add_child_nodes(color.value)
+        }
+
+        //responsible to get all the data from the database(by making an api call the backend server) corresponding to the color provided by the user
+        function rest_api_caller_to_add_child_nodes(color){
+            xmlhttp = new XMLHttpRequest();
+            console.log(color)
+            var child_nodes_for_material=""
+             xmlhttp.onreadystatechange = function() {
+                 if (this.readyState == 4 && this.status == 200){
+                 console.log(this.responseText+" is the row containing the color")
+                 child_nodes_for_material+=this.responseText
+                function_to_add_childs_to_materials_list(child_nodes_for_material)
+                }
+             }
+           
+            xmlhttp.open("POST","http://localhost:8080/row_for_ChildNode_adder",true)
+            xmlhttp.setRequestHeader("Content-type", "text/plain");
+            xmlhttp.send(color)
+            
+        }
+        //adding all the values to the materials list
+        function function_to_add_childs_to_materials_list(child_nodes_for_material){
+            console.log(typeof(child_nodes_for_material))
+            materials=document.getElementById('Material')
+            child_nodes_for_material=child_nodes_for_material.substring(1,child_nodes_for_material.length-1)
+            var child_nodes=child_nodes_for_material.split(",")//child_nodes array will contain each child with extra double quotes 
+
+            //forming the child node in proper format
+            var child_node=[]
+            child_nodes.forEach(child_node_for_material=>{
+                child_node.push(child_node_for_material.substring(1,child_node_for_material.length-1))
+            })
+
+            for(var id=0;id<child_nodes.length;id++){
+                var option=document.createElement('option')
+                new_item=document.createTextNode(child_node[id])
+                option.value=new_item.nodeValue
+               option.appendChild(new_item)
+               materials.appendChild(option)
+            }
+           // df.appendChild(materials)
+        }
+
+function add_shirt(){
+    var materials=document.getElementById('Material')
+    var colors=document.getElementById('Colors')
+     var NoOfShirts=document.getElementById('NoOfShirts') 
+
+     var material_selected=String(materials.value)
+     var material_selected_with_no_stock=material_selected.substring(0,material_selected.indexOf(':')+1)
+     var stock_available=parseInt(material_selected.substring(material_selected.indexOf(':')+1))
+     console.log(stock_available)
+
+    var stock_available_after_selection=stock_available-parseInt(NoOfShirts.value)
+    if(stock_available_after_selection<0){
+        document.getElementById('shirt1').innerHTML="SORRY!! OUT OF STOCK"
+        return;
+    }
+    var new_item_in_string_format=material_selected_with_no_stock+stock_available_after_selection
+    console.log(new_item_in_string_format)
+
+     new_item=document.createTextNode(new_item_in_string_format)
+    var option=document.createElement('option')
+    option.value=new_item.nodeValue
+    option.appendChild(new_item)
+    materials.appendChild(option)
+   
+   
+    var material_to_be_deleted=[]
+    for(var id=0;id<materials.children.length*2;id++){
+        if(materials.childNodes[id].nodeName=='OPTION'){
+            nodeName_to_compare_in_string_format=String(materials.childNodes[id].value)
+            nodeName_to_compare=nodeName_to_compare_in_string_format.substring(0,nodeName_to_compare_in_string_format.indexOf(':')+1)
+            
+            if(material_selected_with_no_stock.localeCompare(nodeName_to_compare)==0){
+               material_to_be_deleted.push(materials.childNodes[id])
+               // materials.removeChild(materials.childNodes[id])
+            }
+        }
+    }
+    console.log(material_to_be_deleted[0].value)
+    materials.removeChild(material_to_be_deleted[0])
+
+    var string_to_send_to_backend=new_item_in_string_format+";"
+     for(var id=0;id<materials.children.length*2;id++){
+        if(materials.childNodes[id].nodeName=='OPTION'){
+            string_to_send_to_backend+=materials.childNodes[id].value+";"
+        }
+       
+     }
+     console.log(string_to_send_to_backend)
+     update_table_in_backend(colors.value+";"+string_to_send_to_backend)
+
+}
+function update_table_in_backend(string_to_send_to_backend){
+        xmlhttp = new XMLHttpRequest();  
+        xmlhttp.open("POST","http://localhost:8080/sql_connector",true)
+        xmlhttp.setRequestHeader("Content-type", "text/plain");
+        xmlhttp.send(string_to_send_to_backend)
+            
+        }
+</script>
